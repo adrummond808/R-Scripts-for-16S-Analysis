@@ -1,0 +1,63 @@
+#based on https://benjjneb.github.io/dada2/tutorial.html
+# store the current directory
+initial.dir <- getwd()
+# change to the working directory
+setwd("C:/wd" )
+# load the necessary libraries
+library(dada2)
+# define the path to fastq files
+path <- "C:/sample" 
+# Forward and reverse fastq filenames have format: SAMPLENAME_R1_001.fastq and SAMPLENAME_R2_001.fastq
+fnFs <- sort(list.files(path, pattern = "_R1_001.fastq.gz", full.names = TRUE))
+fnRs <- sort(list.files(path, pattern = "_R2_001.fastq.gz", full.names = TRUE))
+# Extract sample names, assuming filenames have format: SAMPLENAME_XXX.fastq
+sample.names <- sapply(strsplit(basename(fnFs), "_R"), `[`, 1)
+# Place filtered files in filtered/ subdirectory
+filtFs <- file.path(path, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
+filtRs <- file.path(path, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
+# trim forward and reverse reads as appropriate
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, trimRight=6,
+              maxEE=c(2,3), truncQ=2, rm.phix=TRUE, 
+			  compress=TRUE, multithread=FALSE)
+head(out)
+#fix losses at filtering
+setDadaOpt(OMEGA_C = 0)
+#get error model for forward and reverse reads (slow)
+errF <- learnErrors(filtFs, multithread=TRUE)
+errR <- learnErrors(filtRs, multithread=TRUE)
+#plot to check errors sensible
+plotErrors(errF, nominalQ=TRUE)
+plotErrors(errR, nominalQ=TRUE)
+# apply the core sample inference algorithm to the filtered and trimmed sequence data.
+dadaFs <- dada(filtFs, err=errF, multithread=TRUE)
+dadaRs <- dada(filtRs, err=errR, multithread=TRUE)
+#dadaFs[[1]]
+#merge paired reads
+mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, maxMismatch = 1, verbose=TRUE)
+# Inspect the merger data.frame from the first sample
+head(mergers)
+#some useful stuff
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+table(nchar(getSequences(seqtab)))
+#remove Chimeras
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
+dim(seqtab.nochim)
+#track reads through pipeline (assume 1 pair)
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, getN(dadaFs), getN(dadaRs), getN(mergers), rowSums(seqtab.nochim))
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sample.names
+head(track)
+#get taxonomy of sequences
+taxa <- assignTaxonomy(seqtab.nochim, "C:/silva_nr99_taxa/silva_nr99_v138_train_set.fa.gz", multithread=FALSE)
+taxa.print <- taxa 
+#collate data and write .csv file
+ full.print <- cbind(Abundance = (seqtab.nochim[1,]), Sequence = colnames(seqtab.nochim),taxa.print)
+ write.table(full.print, file=file.path(path, paste0(sample.names,".csv")), sep=",", row.names=FALSE)
+# unload the libraries
+detach("package:dada2")
+# change back to the original directory
+setwd(initial.dir)

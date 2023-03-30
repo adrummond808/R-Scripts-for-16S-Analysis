@@ -1,0 +1,53 @@
+# store the current directory
+initial.dir<-getwd()
+# change to the working directory
+setwd("C:/Users/wd" )
+# load the necessary libraries
+library(seqinr)
+# define the path to .csv files
+path <- "C:/sample.csv" 
+#get sequences input
+sample_name <- ""
+data_all <- read.csv (file = paste0(sample".csv"))
+head (data_all)
+#for multiple study need to figure out which column you want e.g. 3 in this example
+n <- 3
+#and select those sequences which actually have some abundance i.e. > 0 
+nam2 <- data_all[n] > 0
+which_is_pres <- which(nam2)
+#get the sequences for those enties  
+seqsn <- data_all$Sequence[which_is_pres]
+#give the fasta entries an informative name
+names2 <- paste("Abundance",data_all[which_is_pres,n], colnames(data_all[n]), data_all$Order[which_is_pres], data_all$Family[which_is_pres], data_all$Genus[which_is_pres], sep=".")
+#write fasta file
+write.fasta(as.list(seqsn),names=names2,file.out= paste0(colnames(data_all[n]),".fasta"), open = "w", nbchar = 60, as.string = TRUE)
+# unload the libraries
+detach("package:seqinr")
+# change back to the original directory
+setwd(initial.dir)
+Create CSV File from FASTA File
+# store the current directory
+initial.dir<-getwd()
+# change to the working directory
+setwd("C:/Users/wd")
+# load the necessary libraries
+library(seqinr)
+library(dada2)
+# define the path to fasta files
+path <- "C:/Users/sample"
+seq_file <- file.path(path,"sample.fasta") 
+#get sequences input
+sequences <- read.fasta(file = seq_file, seqtype = "DNA", as.string = TRUE)
+name_seq <- substr(attr(sequences,"name"),5,12) # get name of sequences for later only characters 5-12
+proper_seqs <- unlist(sequences)
+#get taxonomy of sequences
+taxa <- assignTaxonomy(proper_seqs, "C:/Users/silva_nr99_taxa/silva_nr99_v138_train_set.fa.gz", multithread=FALSE)
+taxa.print <- taxa 
+test_taxa.print <- cbind(Accession = name_seq, Sequence = rownames(taxa.print), taxa.print) # change sequence rownames to column of sequences 
+#write .csv file
+write.table(unlist(test_taxa.print), file=file.path(path,"taxa.csv") , sep=",", row.names=FALSE)
+# unload the libraries
+detach("package:seqinr")
+detach("package:dada2")
+# change back to the original directory
+setwd(initial.dir)
